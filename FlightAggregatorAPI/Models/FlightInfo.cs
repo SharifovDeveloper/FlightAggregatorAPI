@@ -11,5 +11,6 @@ namespace FlightAggregatorAPI.Models
         public DateTime ArrivalTime { get; set; }
         public decimal Price { get; set; }
         public int Stops { get; set; }
+        public int TicketsAvailable { get; set; }
     }
 }

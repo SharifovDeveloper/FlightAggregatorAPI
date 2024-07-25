@@ -1,7 +1,6 @@
-﻿using FlightAggregatorAPI.Models;
-using FlightAggregatorAPI.Services;
+﻿using FlightAggregatorAPI.Services;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Caching.Memory;
+using ZiggyCreatures.Caching.Fusion;
 
 namespace FlightAggregatorAPI.Controllers
 {
@@ -9,11 +8,11 @@ namespace FlightAggregatorAPI.Controllers
     [Route("api/[controller]")]
     public class FlightsController : ControllerBase
     {
-        private readonly FlightAggregatorService _flightAggregatorService;
-        private readonly IMemoryCache _cache;
+        private readonly IFlightAggregatorService _flightAggregatorService;
+        private readonly IFusionCache _cache;
         private readonly ILogger<FlightsController> _logger;
 
-        public FlightsController(FlightAggregatorService flightAggregatorService, IMemoryCache cache, ILogger<FlightsController> logger)
+        public FlightsController(IFlightAggregatorService flightAggregatorService, IFusionCache cache, ILogger<FlightsController> logger)
         {
             _flightAggregatorService = flightAggregatorService;
             _cache = cache;
@@ -21,31 +20,55 @@ namespace FlightAggregatorAPI.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> SearchFlights()
+        public async Task<IActionResult> SearchFlights(
+            [FromQuery] DateTime? date = null,
+            [FromQuery] string airline = null,
+            [FromQuery] decimal? minPrice = null,
+            [FromQuery] decimal? maxPrice = null,
+            [FromQuery] int? maxStops = null,
+            [FromQuery] string sortBy = null,
+            [FromQuery] bool descending = false,
+            [FromQuery] string searchString = null
+        )
         {
-            const string cacheKey = "flights";
-
-            if (!_cache.TryGetValue(cacheKey, out IEnumerable<FlightInfo> flights))
+            try
             {
-                flights = await _flightAggregatorService.SearchFlightsAsync();
+                var cacheKey = $"Flights_Search_{date}_{airline}_{minPrice}_{maxPrice}_{maxStops}_{sortBy}_{descending}_{searchString}";
 
-                var cacheEntryOptions = new MemoryCacheEntryOptions
+                var flights = await _cache.GetOrSetAsync(cacheKey, async cacheEntry =>
                 {
-                    AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5)
-                };
 
-                _cache.Set(cacheKey, flights, cacheEntryOptions);
+                    return await _flightAggregatorService.SearchFlightsAsync(date, airline, minPrice, maxPrice, maxStops, sortBy, descending, searchString);
+                });
+
+                return Ok(flights);
             }
-
-            return Ok(flights);
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred while searching for flights.");
+                return StatusCode(500, "Internal server error");
+            }
         }
 
         [HttpPost("book")]
-        public async Task<IActionResult> BookFlight([FromBody] BookingRequest request)
+        public async Task<IActionResult> BookFlight([FromBody] Booking booking)
         {
-            _logger.LogInformation("Booking flight for {PassengerName}", request.PassengerName);
-            var success = await _flightAggregatorService.BookFlightAsync(request);
-            return success ? Ok() : StatusCode(500, "Booking failed");
+            if (booking == null)
+            {
+                return BadRequest("Booking cannot be null.");
+            }
+
+            try
+            {
+                _logger.LogInformation("Booking flight for {PassengerName}", booking.PassengerName);
+                var success = await _flightAggregatorService.BookFlightAsync(booking);
+                return success ? Ok() : StatusCode(500, "Booking failed");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred while booking flight for {PassengerName}", booking.PassengerName);
+                return StatusCode(500, "Internal server error");
+            }
         }
     }
 }

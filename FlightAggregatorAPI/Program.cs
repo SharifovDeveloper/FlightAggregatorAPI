@@ -1,36 +1,56 @@
+using FlightAggregatorAPI.Data;
+using FlightAggregatorAPI.Services;
+using Microsoft.EntityFrameworkCore;
+using Serilog;
+using Serilog.Events;
+using Stl.Fusion;
+using Stl.Fusion.Extensions;
+using ZiggyCreatures.Caching.Fusion;
 
-namespace FlightAggregatorAPI
+var builder = WebApplication.CreateBuilder(args);
+
+// Configure Serilog
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Verbose()
+    .Enrich.FromLogContext()
+    .WriteTo.Console(new CustomJsonFormatter())
+    .WriteTo.File(new CustomJsonFormatter(), "logs/logs.txt", rollingInterval: RollingInterval.Day)
+    .WriteTo.File(new CustomJsonFormatter(), "logs/error_.txt", LogEventLevel.Error, rollingInterval: RollingInterval.Day)
+    .CreateLogger();
+builder.Services.AddFusionCache()
+     .WithDefaultEntryOptions(new FusionCacheEntryOptions
+     {
+         Duration = TimeSpan.FromMinutes(10)
+     })
+ ;
+
+// Add services to the container
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+builder.Services.AddMemoryCache();
+builder.Services.AddLogging(loggingBuilder =>
+    loggingBuilder.AddSerilog(dispose: true));
+
+builder.Services.AddDbContext<FlightContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+var fusion = builder.Services.AddFusion();
+fusion.AddFusionTime();
+
+builder.Services.AddTransient<IFlightAggregatorService, FlightAggregatorService>();
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline
+if (app.Environment.IsDevelopment())
 {
-    public class Program
-    {
-        public static void Main(string[] args)
-        {
-            var builder = WebApplication.CreateBuilder(args);
-
-            // Add services to the container.
-
-            builder.Services.AddControllers();
-            // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-            builder.Services.AddEndpointsApiExplorer();
-            builder.Services.AddSwaggerGen();
-
-            var app = builder.Build();
-
-            // Configure the HTTP request pipeline.
-            if (app.Environment.IsDevelopment())
-            {
-                app.UseSwagger();
-                app.UseSwaggerUI();
-            }
-
-            app.UseHttpsRedirection();
-
-            app.UseAuthorization();
-
-
-            app.MapControllers();
-
-            app.Run();
-        }
-    }
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
+
+app.UseHttpsRedirection();
+app.UseAuthorization();
+app.MapControllers();
+
+app.Run();

@@ -5,6 +5,6 @@ namespace FlightAggregatorAPI.Services
     public interface IFlightDataSource
     {
         Task<IEnumerable<FlightInfo>> GetFlightsAsync();
-        Task<bool> BookFlightAsync(BookingRequest request);
+        Task<bool> BookFlightAsync(Booking request);
     }
 }
