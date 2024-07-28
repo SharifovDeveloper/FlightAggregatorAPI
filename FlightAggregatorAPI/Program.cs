@@ -32,6 +32,7 @@ builder.Services.AddMemoryCache();
 builder.Services.AddLogging(loggingBuilder =>
     loggingBuilder.AddSerilog(dispose: true));
 
+
 builder.Services.AddDbContext<FlightContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
@@ -39,6 +40,9 @@ var fusion = builder.Services.AddFusion();
 fusion.AddFusionTime();
 
 builder.Services.AddTransient<IFlightAggregatorService, FlightAggregatorService>();
+builder.Services.AddTransient<ITicketNumberService, TicketNumberService>();
+builder.Services.AddTransient<ITicketService, TicketService>();
+
 
 var app = builder.Build();
 

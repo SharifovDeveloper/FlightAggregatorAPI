@@ -1,5 +1,6 @@
 ﻿using FlightAggregatorAPI.Services;
 using Microsoft.AspNetCore.Mvc;
+using Stl.Fusion;
 using ZiggyCreatures.Caching.Fusion;
 
 namespace FlightAggregatorAPI.Controllers
@@ -9,12 +10,14 @@ namespace FlightAggregatorAPI.Controllers
     public class FlightsController : ControllerBase
     {
         private readonly IFlightAggregatorService _flightAggregatorService;
+        private readonly ITicketService _ticketService;
         private readonly IFusionCache _cache;
         private readonly ILogger<FlightsController> _logger;
 
-        public FlightsController(IFlightAggregatorService flightAggregatorService, IFusionCache cache, ILogger<FlightsController> logger)
+        public FlightsController(IFlightAggregatorService flightAggregatorService, ITicketService ticketService, IFusionCache cache, ILogger<FlightsController> logger)
         {
             _flightAggregatorService = flightAggregatorService;
+            _ticketService = ticketService;
             _cache = cache;
             _logger = logger;
         }
@@ -50,7 +53,8 @@ namespace FlightAggregatorAPI.Controllers
             }
         }
 
-        [HttpPost("book")]
+        [ComputeMethod]
+        [HttpPost]
         public async Task<IActionResult> BookFlight([FromBody] Booking booking)
         {
             if (booking == null)
@@ -62,7 +66,20 @@ namespace FlightAggregatorAPI.Controllers
             {
                 _logger.LogInformation("Booking flight for {PassengerName}", booking.PassengerName);
                 var success = await _flightAggregatorService.BookFlightAsync(booking);
-                return success ? Ok() : StatusCode(500, "Booking failed");
+
+                if (!success)
+                {
+                    return StatusCode(500, "Booking failed");
+                }
+
+                var ticket = await _ticketService.IssueTicketAsync(booking);
+
+                if (ticket == null)
+                {
+                    return StatusCode(500, "Ticket issuance failed");
+                }
+
+                return Ok(ticket);
             }
             catch (Exception ex)
             {
@@ -70,5 +87,6 @@ namespace FlightAggregatorAPI.Controllers
                 return StatusCode(500, "Internal server error");
             }
         }
+
     }
 }
